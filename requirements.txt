@@ -2,4 +2,4 @@ flask
 flask-cors
 telethon
 gunicorn
-
+requests
